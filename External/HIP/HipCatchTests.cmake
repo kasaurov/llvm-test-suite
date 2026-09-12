@@ -50,10 +50,18 @@ else()
   include(FetchContent)
   # Release tarball rather than a clone: the shallow clone pulls ~13MB, of which
   # ~8MB is .git history that is discarded immediately.
+  #
+  # The tarball and unpacked sources go to TEST_SUITE_HIP_MANAGED_DIR so they
+  # survive `rm -rf build/` instead of being re-downloaded. BINARY_DIR is left in
+  # the build tree on purpose: the compiled objects depend on the toolchain and
+  # build type, so sharing one across configurations would let them clobber
+  # each other.
   FetchContent_Declare(
     Catch2
-    URL      https://github.com/catchorg/Catch2/archive/refs/tags/v3.8.1.tar.gz
-    URL_HASH SHA256=18b3f70ac80fccc340d8c6ff0f339b2ae64944782f8d2fca2bd705cf47cadb79
+    URL          https://github.com/catchorg/Catch2/archive/refs/tags/v3.8.1.tar.gz
+    URL_HASH     SHA256=18b3f70ac80fccc340d8c6ff0f339b2ae64944782f8d2fca2bd705cf47cadb79
+    DOWNLOAD_DIR ${TEST_SUITE_HIP_MANAGED_DIR}/catch2/download
+    SOURCE_DIR   ${TEST_SUITE_HIP_MANAGED_DIR}/catch2/src
   )
   FetchContent_MakeAvailable(Catch2)
   # The test-suite rewrites CMAKE_CXX_COMPILE_OBJECT to wrap compiles in
@@ -286,10 +294,12 @@ function(create_generic_target_executables TEST_BASENAME TEST_DIR VARIANT_SUFFIX
       -unwindlib=libgcc
       -frtlib-add-rpath
       ${_include_flags}
-      # -x hip above applies to every following input, which would make clang
-      # try to compile the Catch2 archive as HIP source. Reset it first.
-      -x none
-      "$<TARGET_FILE:Catch2::Catch2>"
+      # Link Catch2 by -L/-l rather than by path: -x hip above applies to every
+      # following input file, and would make clang compile the archive as HIP
+      # source. The base name comes from the target so that it picks up
+      # DEBUG_POSTFIX, which makes the library libCatch2d in Debug builds.
+      -L$<TARGET_FILE_DIR:Catch2::Catch2>
+      -l$<TARGET_FILE_BASE_NAME:Catch2::Catch2>
       ${_libfs_flag}
     DEPENDS ${_common_sources}
     WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
@@ -322,10 +332,9 @@ function(create_generic_target_executables TEST_BASENAME TEST_DIR VARIANT_SUFFIX
       -unwindlib=libgcc
       -frtlib-add-rpath
       ${_include_flags}
-      # -x hip above applies to every following input, which would make clang
-      # try to compile the Catch2 archive as HIP source. Reset it first.
-      -x none
-      "$<TARGET_FILE:Catch2::Catch2>"
+      # See the note on linking Catch2 in the regular build above.
+      -L$<TARGET_FILE_DIR:Catch2::Catch2>
+      -l$<TARGET_FILE_BASE_NAME:Catch2::Catch2>
       ${_libfs_flag}
     DEPENDS ${_common_sources}
     WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
